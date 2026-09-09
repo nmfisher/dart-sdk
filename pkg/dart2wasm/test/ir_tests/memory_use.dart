@@ -12,6 +12,10 @@ import 'dart:_wasm';
 @pragma('wasm:memory-type', MemoryType(limits: Limits(1)))
 external Memory get memory;
 
+@pragma('wasm:import', 'foo.second_mem')
+@pragma('wasm:memory-type', MemoryType(limits: Limits(1)))
+external Memory get secondMemory;
+
 @pragma('wasm:never-inline')
 void main() {
   memory.size;
@@ -24,4 +28,18 @@ void main() {
   print(memory.loadFloat32(0, align: 2, offset: 1).toDouble());
 
   memory.storeInt32(memory.size, WasmI32.fromInt(32), offset: 10);
+
+  // Swapping the memory index and offset makes this reference memory 258,
+  // which wasm-opt must reject before the IR snapshot is produced.
+  secondMemory.storeFloat64(
+    secondMemory.size,
+    WasmF64.fromDouble(42.5),
+    offset: 258,
+    align: 3,
+  );
+  print(
+    secondMemory
+        .loadFloat64(secondMemory.size, offset: 258, align: 3)
+        .toDouble(),
+  );
 }
