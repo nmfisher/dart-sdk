@@ -2119,7 +2119,7 @@ mixin _FfiUseSiteTransformer on FfiTransformer {
     return null;
   }
 
-  StaticInvocation _replaceNativeCall(
+  Expression _replaceNativeCall(
     StaticInvocation node,
     InstanceConstant targetNativeAnnotation,
   ) {
@@ -2170,6 +2170,26 @@ mixin _FfiUseSiteTransformer on FfiTransformer {
       return node;
     }
 
+    // A compound return can make the original declaration a Dart wrapper that
+    // keeps the compound constructor alive for TFA. Specialize its external
+    // entry point, not the wrapper: cloning the wrapper without its body would
+    // produce a Dart function that returns null without calling native code.
+    var nativeTarget = target;
+    Class? compoundReturn;
+    if (target.function.body case ReturnStatement(
+      expression: BlockExpression(
+        value: StaticInvocation(target: final wrappedTarget),
+      ),
+    )) {
+      compoundReturn = findCompoundReturnType(
+        target.function.computeFunctionType(Nullability.nonNullable),
+      );
+      if (compoundReturn != null) {
+        assert(wrappedTarget.isExternal);
+        nativeTarget = wrappedTarget;
+      }
+    }
+
     final newName = '#${target.name.text}#$methodPostfix';
     final Procedure newTarget;
     final parent = target.parent;
@@ -2193,7 +2213,7 @@ mixin _FfiUseSiteTransformer on FfiTransformer {
         );
       }
       final cloner = CloneProcedureWithoutBody();
-      newTarget = cloner.cloneProcedure(target, null);
+      newTarget = cloner.cloneProcedure(nativeTarget, null);
       newTarget.name = Name(newName);
       newTarget.function.positionalParameters = newParameters;
       setParents(newParameters, newTarget.function);
@@ -2204,8 +2224,12 @@ mixin _FfiUseSiteTransformer on FfiTransformer {
           parent.addProcedure(newTarget);
       }
     }
-    return StaticInvocation(newTarget, Arguments(newArguments))
-      ..parent = parent;
+    Expression result = StaticInvocation(newTarget, Arguments(newArguments))
+      ..fileOffset = node.fileOffset;
+    if (compoundReturn != null) {
+      result = invokeCompoundConstructor(result, compoundReturn);
+    }
+    return result..parent = node.parent;
   }
 
   /// Converts a single parameter with argument for [_replaceNativeCall].

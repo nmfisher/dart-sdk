@@ -60,6 +60,36 @@ DART_EXPORT Coord GetGlobalStruct() {
   return globalStruct;
 }
 
+// Compound returns combined with address arguments. Mutating the input also
+// verifies that the specialized native entry point is actually invoked.
+struct AddressSmallResult {
+  float a;
+  int32_t b;
+};
+
+struct AddressLargeResult {
+  int64_t a;
+  int64_t b;
+  int64_t c;
+};
+
+union AddressUnionResult {
+  int64_t integer;
+  double floating;
+};
+
+DART_EXPORT AddressSmallResult ReturnSmallFromPointer(uint8_t* value) {
+  return {static_cast<float>((*value)++), 42};
+}
+
+DART_EXPORT AddressLargeResult ReturnLargeFromPointer(uint8_t* value) {
+  return {(*value)++, 42, 43};
+}
+
+DART_EXPORT AddressUnionResult ReturnUnionFromPointer(uint8_t* value) {
+  return {(*value)++};
+}
+
 DART_EXPORT void SleepFor(int32_t ms) {
   std::cout << "Sleeping for " << ms << " milliseconds...\n";
   std::this_thread::sleep_for(std::chrono::milliseconds(ms));
